@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ackermann Function Calculator</title>
+  <meta name="description" content="Compute A(m,n) with deep-recursive & iterative engines. Visualize exponential call-stack growth, step through traces, and explore the theory." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-theme="dark">
+
+<!-- ════════════════════ HEADER ════════════════════ -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-title-block">
+      <h1>⚡ Ackermann Function Calculator</h1>
+      <p class="tagline">Compute A(m,&nbsp;n) · visualize super-exponential growth · explore a function that outgrows every primitive-recursive bound</p>
+    </div>
+    <button id="theme-btn" class="btn btn-ghost" aria-label="Toggle theme">☀️ Light Mode</button>
+  </div>
+</header>
+
+<!-- ════════════════════ MAIN ════════════════════ -->
+<main class="container">
+
+  <!-- ── Quick Examples ─────────────────────────────────── -->
+  <section class="examples-bar" aria-label="Quick examples">
+    <span class="examples-label">Try:</span>
+    <button class="btn btn-example" onclick="setExample(2,3)">A(2,&thinsp;3) = 9</button>
+    <button class="btn btn-example" onclick="setExample(3,5)">A(3,&thinsp;5) = 253</button>
+    <button class="btn btn-example" onclick="setExample(3,10)">A(3,&thinsp;10)</button>
+    <button class="btn btn-example" onclick="setExample(4,1)">A(4,&thinsp;1) = 65533</button>
+  </section>
+
+  <!-- ── Input Panel ───────────────────────────────────── -->
+  <section class="panel input-panel" aria-label="Calculator inputs">
+    <h2 class="panel-title">Compute A(m, n)</h2>
+    <div class="input-grid">
+
+      <div class="input-group">
+        <label for="input-m">m <span class="label-hint">(row, 0–4 recommended)</span></label>
+        <input id="input-m" type="number" min="0" max="10" value="3"
+               aria-label="m parameter" autocomplete="off" />
+      </div>
+
+      <div class="input-group">
+        <label for="input-n">n <span class="label-hint">(column, 0–10 recommended)</span></label>
+        <input id="input-n" type="number" min="0" max="1000000" value="5"
+               aria-label="n parameter" autocomplete="off" />
+      </div>
+
+      <div class="input-group">
+        <label for="mode-select">Computation Mode</label>
+        <select id="mode-select" aria-label="Select computation mode">
+          <option value="iterative">Iterative (safe, recommended)</option>
+          <option value="pure">Pure Recursive (small inputs only)</option>
+          <option value="memoized">Memoized (iterative + cache)</option>
+          <option value="closedform">Closed-Form (m≤3 instant)</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label for="max-calls">Max Calls <span class="label-hint">(safety limit)</span></label>
+        <input id="max-calls" type="number" min="1000" max="500000000" value="50000000"
+               aria-label="Maximum call limit" />
+      </div>
+
+    </div>
+
+    <div class="btn-row">
+      <button id="btn-calc" class="btn btn-primary" aria-label="Calculate Ackermann function">
+        ⚡ Calculate
+      </button>
+      <button id="btn-stop" class="btn btn-danger" disabled aria-label="Stop computation">
+        ⏹ Stop
+      </button>
+      <button id="btn-copy" class="btn btn-ghost" aria-label="Copy result to clipboard">
+        Copy Result
+      </button>
+      <button id="btn-export" class="btn btn-ghost" aria-label="Export results as CSV">
+        Export CSV
+      </button>
+    </div>
+
+    <!-- Validation & Warning messages -->
+    <div id="validation-msg" class="msg msg-error" role="alert" aria-live="assertive" style="display:none"></div>
+    <div id="warning-msg" class="msg msg-warning" role="alert" style="display:none"></div>
+
+    <!-- Progress bar -->
+    <div id="progress-section" style="display:none" aria-live="polite">
+      <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+        <div id="progress-bar-fill" class="progress-bar-fill"></div>
+      </div>
+      <p id="progress-label" class="progress-label"></p>
+    </div>
+  </section>
+
+  <!-- ── Results Cards ─────────────────────────────────── -->
+  <section class="results-grid" aria-label="Computation results" aria-live="polite">
+    <div class="result-card card-result">
+      <div class="card-label">Result</div>
+      <div id="result-value" class="card-value result-value" aria-live="polite">—</div>
+    </div>
+    <div class="result-card card-calls">
+      <div class="card-label">Total Calls</div>
+      <div id="calls-value" class="card-value">—</div>
+    </div>
+    <div class="result-card card-depth">
+      <div class="card-label">Max Stack Depth</div>
+      <div id="depth-value" class="card-value">—</div>
+    </div>
+    <div class="result-card card-time">
+      <div class="card-label">Time Taken</div>
+      <div id="time-value" class="card-value">—</div>
+    </div>
+    <div class="result-card card-cache" id="cache-row" style="display:none">
+      <div class="card-label">Cache Hits</div>
+      <div id="cache-hits-value" class="card-value">—</div>
+    </div>
+  </section>
+
+  <!-- ── Comparison Table ──────────────────────────────── -->
+  <section class="panel" aria-label="Precomputed A(m,n) table">
+    <h2 class="panel-title">📊 Precomputed Values: A(m, n)</h2>
+    <p class="section-desc">Highlighted cell matches your current input. Values for m=0..4, n=0..6.</p>
+    <div class="table-scroll">
+      <table class="comp-table" aria-label="Ackermann values grid">
+        <thead>
+          <tr>
+            <th>m \ n</th>
+            <th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th>
+          </tr>
+        </thead>
+        <tbody id="comp-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Growth Chart ──────────────────────────────────── -->
+  <section class="panel" aria-label="Growth visualization">
+    <h2 class="panel-title">📈 Call Count Growth</h2>
+    <p class="section-desc">See how call count explodes as n increases. Y-axis is <strong>logarithmic</strong>.</p>
+    <div class="growth-controls">
+      <label for="growth-m">m =</label>
+      <input id="growth-m" type="number" min="0" max="4" value="3" style="width:60px" />
+      <label for="growth-max-n">up to n =</label>
+      <input id="growth-max-n" type="number" min="1" max="15" value="7" style="width:60px" />
+      <button id="btn-growth" class="btn btn-primary">Generate Growth Table</button>
+    </div>
+    <div class="chart-container">
+      <canvas id="growth-chart" aria-label="Growth chart" role="img"></canvas>
+    </div>
+    <div class="table-scroll" style="margin-top:1rem">
+      <table class="comp-table">
+        <thead>
+          <tr><th>n</th><th>A(m, n)</th><th>Total Calls</th><th>Max Depth</th></tr>
+        </thead>
+        <tbody id="growth-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Call-Stack Trace Viewer ───────────────────────── -->
+  <section id="trace-section" class="panel" style="display:none" aria-label="Call stack trace">
+    <h2 class="panel-title">🔍 Call-Stack Trace Viewer</h2>
+    <p class="section-desc">Available for m ≤ 2, n ≤ 3. Step through every call and return.</p>
+    <div id="trace-truncated" class="msg msg-warning" style="display:none">
+      ⚠️ Trace truncated at 2,000 steps. Only first 2,000 calls shown.
+    </div>
+    <div class="trace-controls">
+      <button id="btn-trace-reset" class="btn btn-ghost">⏮ Reset</button>
+      <button id="btn-trace-back" class="btn btn-ghost" disabled>◀ Back</button>
+      <button id="btn-trace-play" class="btn btn-primary">▶ Play</button>
+      <button id="btn-trace-fwd" class="btn btn-ghost" disabled>▶ Fwd</button>
+      <span id="trace-counter" class="trace-counter">Step — / —</span>
+    </div>
+    <pre id="trace-log" class="trace-log" aria-live="polite" aria-label="Call trace log"></pre>
+    <h3 class="sub-title">Stack Depth Over Time</h3>
+    <div class="chart-container chart-small">
+      <canvas id="depth-chart" aria-label="Stack depth bar chart" role="img"></canvas>
+    </div>
+  </section>
+
+  <!-- ══════════════ THEORY SECTION ══════════════ -->
+  <section class="panel theory-section" aria-label="About the Ackermann Function">
+    <h2 class="panel-title">📚 About the Ackermann Function</h2>
+
+    <div class="theory-grid">
+      <div class="theory-block">
+        <h3>What is it?</h3>
+        <p>
+          The <strong>Ackermann function</strong> A(m, n) is a function of two non-negative integers
+          defined by a simple three-branch recurrence:
+        </p>
+        <div class="formula-box">
+          <div>A(0, n) = n + 1</div>
+          <div>A(m, 0) = A(m−1, 1)</div>
+          <div>A(m, n) = A(m−1, A(m, n−1))</div>
+        </div>
+        <p>
+          Despite its tiny definition, the values it produces are <em>staggeringly</em> large even
+          for small inputs. A(4, 2) has nearly <strong>20,000 digits</strong>.
+        </p>
+      </div>
+
+      <div class="theory-block">
+        <h3>History</h3>
+        <p>
+          Devised by <strong>Wilhelm Ackermann</strong> in <strong>1928</strong> while working under
+          David Hilbert. He was looking for an example of a function that is
+          <em>computable</em> (you can write an algorithm for it) but
+          <em>not primitive recursive</em> — meaning it cannot be expressed
+          using only bounded loops (for-loops). It was one of the first functions proven to be
+          computable but non-primitive-recursive.
+        </p>
+      </div>
+
+      <div class="theory-block">
+        <h3>Why not primitive recursive?</h3>
+        <p>
+          Primitive recursive functions are built from addition and multiplication using a
+          finite number of nested loops. The Ackermann function <em>grows faster than any
+          primitive recursive function</em> — no fixed number of nested for-loops can compute it.
+          Each row m adds a new level of iterated exponentiation.
+        </p>
+      </div>
+
+      <div class="theory-block">
+        <h3>Connection to Hyperoperations</h3>
+        <p>
+          Each row of A(m, n) corresponds to a level of the <strong>hyperoperation sequence</strong>:
+        </p>
+        <table class="theory-table">
+          <thead><tr><th>m</th><th>Operation</th><th>A(m, n)</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>Successor</td><td>n + 1</td></tr>
+            <tr><td>1</td><td>Addition</td><td>n + 2</td></tr>
+            <tr><td>2</td><td>Multiplication</td><td>2n + 3</td></tr>
+            <tr><td>3</td><td>Exponentiation</td><td>2<sup>n+3</sup> − 3</td></tr>
+            <tr><td>4</td><td>Tetration</td><td>2↑↑(n+3) − 3</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="theory-block">
+        <h3>Closed Forms for m = 0..3</h3>
+        <table class="theory-table">
+          <thead><tr><th>m</th><th>Closed Form</th><th>Example A(m, 4)</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>n + 1</td><td>5</td></tr>
+            <tr><td>1</td><td>n + 2</td><td>6</td></tr>
+            <tr><td>2</td><td>2n + 3</td><td>11</td></tr>
+            <tr><td>3</td><td>2<sup>n+3</sup> − 3</td><td>125</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="theory-block">
+        <h3>The Inverse Ackermann Function α(n)</h3>
+        <p>
+          The <strong>inverse Ackermann function</strong> α(n) appears in the analysis of the
+          <em>Union-Find</em> (disjoint-set union) data structure. Its amortized time complexity
+          is O(α(n)) per operation, where α(n) ≤ 4 for any n that could ever be stored in
+          a computer. It is, for all practical purposes, constant time.
+        </p>
+      </div>
+
+      <div class="theory-block">
+        <h3>Why does the call stack grow so fast?</h3>
+        <p>
+          The key case <code>A(m, n) = A(m−1, A(m, n−1))</code> causes a <em>double recursion</em>:
+          computing the outer call requires computing an inner call first, whose <em>result</em>
+          becomes the new n. Since A(3, n) = 2<sup>n+3</sup>−3, a single step at row 3 can
+          produce an argument to row 2 that is exponentially larger. This cascade means the
+          call count for A(3, n) grows roughly as a tower of exponentials.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ════════════════════ FOOTER ════════════════════ -->
+<footer class="site-footer">
+  <p>
+    Ackermann Function Calculator · Built with plain HTML, CSS &amp; JavaScript ·
+    <a href="https://en.wikipedia.org/wiki/Ackermann_function" target="_blank" rel="noopener">Wikipedia</a>
+  </p>
+</footer>
+
+<!-- Chart.js via CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
+
